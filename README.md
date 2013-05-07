@@ -1,15 +1,15 @@
 # Backbone.Baseview
 
-Backbone.BaseView is a subclass of `Backbone.View` that helps with the most common tasks of managing views.
+Backbone.BaseView is a subclass of Backbone.View that helps with the most common tasks of managing views.
 
-Generally most Backbone views have a simple lifecycle, it usually consists of rendering a template, responding to DOM events, and updating some elements within the view. BaseView is designed to remove some of the boilerplate associated with this, while retaining the flexibility that Backbone is known for.
+Generally most Backbone views have a simple lifecycle, it usually consists of rendering a template, responding to DOM events, updating elements and managing several subviews. BaseView is designed to remove some of the boilerplate associated with these tasks, while retaining the flexibility that Backbone is known for.
 
 
 ## Getting started
 
 BaseView is inherited like any other Backbone class by using the `extend` function. Below is an example of the most common methods you might want to override. It's a good place to start if you want to copy and paste an example to get up and running.
 
-##### Example structure
+##### Example usage
 
 ```javascript
 var MyView = Backbone.BaseView.extend({
@@ -51,12 +51,12 @@ myView.$el.appendTo('body');
 myView.render();
 ```
 
-Several concepts are introduced in this example. The most important thing to recognise is there's no `render` function - the rendering process is automated and uses the template information provided in the class definition. The following sections will explain everything in more detail.
+Several concepts are introduced in this example. The most important thing to recognise is there's no `render` function - the rendering process is automated and uses the template information provided in the class definition. The following sections will explain the concepts in more detail.
 
 
 ## Specifying templates and data
 
-Out in the wild the majority of Backbone views tend to render a single template, and it's generally inserted into `View.$el`. This usually leads to the same rendering code being written over and over again. BaseView is designed to reduce repetition and add structure:
+Out in the wild the majority of Backbone views tend to render a single template, and it's generally inserted into `View.$el`. This usually leads to the same rendering code being written over and over again. BaseView is designed to reduce this repetition and add a bit of structure:
 
 ```javascript
 var MyView = Backbone.BaseView.extend({
@@ -75,10 +75,10 @@ var MyView = Backbone.BaseView.extend({
 });
 ```
 
-When you call `render()` it will automatically use the values you've provided and render the template into `View.$el`.
+When you call `render()` it will automatically use the values you've provided and render the template into `View.$el`. Here's what the default `render` function in BaseView looks like:
 
 ```javascript
-// Internally BaseView.render() does something similar to this:
+// Internally BaseView.render() does something like this:
 var template = this.template();
 var templateData = this.templateData();
 this.$el.html(template(templateData)));
@@ -94,7 +94,7 @@ You may be wondering why `template` and `templateData` are functions, and not ju
 
 `template` and `templateData` are designed to be *lazy*, and are called at the last moment, just before `render` actually renders stuff. This gives you the chance to change the value that's returned.
 
-This is incredibly useful for `templateData`. If you're using a logic-less templating language, such as Handlebars, you can't compute values directly in your templates. You must either write a Handlebars helper or pre-compute the value before sending it to the template. Wand promotes the second approach, and encourages you to wrap your data in another object alongside other values.
+It turns out this is incredibly useful for `templateData`. If you're using a logic-less templating language, such as Handlebars, you can't compute values directly in your templates. You must either write a Handlebars helper or pre-compute the value before sending it to the template. BaseView promotes the second approach, and encourages you to wrap your data in an object alongside other values.
 
 In the following example, `age` is not a property of the user model, so we calculate it before sending it to the template:
 
@@ -109,13 +109,13 @@ templateData: function() {
 }
 ```
 
-And then in your template:
+And then in the template:
 
     <p>Hello {{user.name}}, you are {{age}} years old</p>
 
 ### Swapping templates
 
-Using a function for `template` is also useful, it allows you to change the template that's rendered:
+You can also use this feature for the `template` function:
 
 ```javascript
 template: function() {
@@ -123,7 +123,7 @@ template: function() {
   if (this.state === 'open') {
     return '<p>Hello {{user.name}}, welcome to the store</p>';
   } else {
-    return '<p>Sorry, we are not open</p>';
+    return '<p>Sorry, we are closed</p>';
   }
 }
 ```
@@ -133,18 +133,18 @@ Because both `template` and `templateData` are called just before `render()` it 
 
 ## Before and after render
 
-Every time you call `render()` there are two methods that are called automatically: `beforeRender` and `afterRender`. Overriding either is optional. `afterRender` is the more useful of the two, and it's most commonly used to change an element that's become available since rendering:
+Every time you call `render()` there are two methods that are called automatically: `beforeRender` and `afterRender`. Overriding either is optional. `afterRender` is the more useful of the two, and it's most commonly used to change an element that becomes available after rendering:
 
 ```javascript
 afterRender: function() {
   // Useful point at which to modify your newly rendered view
-  this.$('.closeButton').fadeIn();
+  this.$('.closeButton').css('color', 'red');
 }
 ```
 
 **Note:** Try to avoid using `beforeRender` to change the `template` and `templateData` properties. Instead you should place the logic inside the `template` and `templateData` functions themselves, as described in the previous section.
 
-**Also:** `afterRender` is a common place to cache selectors to DOM elements inside the view. Consider using the `elements` hash as an alternative. Check out the Elements section for more info.
+**Also:** `afterRender` is a common place to cache selectors to DOM elements inside the view. Consider using the `elements` hash as an alternative. Check out the [Elements](#elements) section for more info.
 
 
 ## Overriding render
@@ -165,38 +165,51 @@ var MyView = Backbone.BaseView.extend({
     var template = this.template();
     var templateData = this.templateData();
     this.$('.container').html(template(templateData));
+    return this;
   }
 });
 ```
+
+Another reason you might want to override `render` is to generate the view using something other than templates.
 
 **Note:** `beforeRender` and `afterRender` will still be called even if you override `render`. This might not seem necessary now that you have full control of rendering, but it can still be useful if you're keen on maintaining code consistency.
 
 
 ## Elements
 
-Elements is a property of `BaseView` that helps you manage DOM elements that sit inside your view. These are elements that don't warrant an entire View to themselves, but you still want to access them.
+Sometimes you need to modify or read values from DOM elements within your view. The most common approach is to cache references to them after the view is rendered, so that working with them is a little easier. For example:
 
-Each entry in the `elements` object specifies a *name* and a *selector*. The following example shows you how it's used:
+```javascript
+// Common method of working with elements inside a Backbone view:
+var title = this.$('.title');
+title.text('Hello');
+```
+
+This generally isn't a difficult task, but BaseView tries to add some consistency by defining a single place to put all your references. It will also automatically keep them up-to-date for you as the view is re-rendered.
+
+Elements are defined in a hash that contains the *name* of the element and a jquery *selector*. The name will be available to your view after it's rendered, for example:
 
 ```javascript
 var MyView = Backbone.BaseView.extend({
   elements: {
-    '$title': '.title'
+    '$title': '.title',
+    '$bodyText': 'p'
   },
   template: function() {
-    return Handlebars.compile('<h1 class="title">Welcome</h1>');
+    return Handlebars.compile('<h1 class="title">Welcome</h1><p>How are you?</p>');
   },
   afterRender: function() {
     this.$title.text('Hello');
+    this.$bodyText.css('color', 'green');
   }
 });
 ```
 
-Here `.title` is a jQuery selector, and `$title` is the name of the property that will become available on your view after `render` is called. The `$` sign is an optional prefix. These examples use it to share consistency with the built-in `View.$el` property.
+Here `.title` is a jquery selector, and `$title` is the name of the property that becomes available on your view after rendering. The `$` sign is an optional prefix, these examples use it to share consistency with the built-in `View.$el`.
 
-Elements are updated every time `render` is called, and they're available by the time `afterRender` is called. Behind the scenes BaseView loops over the `elements` object setting properties directly on your view. You can also force a manual refresh:
+Elements are automatically updated every time `render` is called. They're available immediately after rendering, so the `afterRender` function is a good place to use them. You can also force a manual refresh:
 
-    // Force manual refresh of the elements, can be called at any point
+    // Force manual refresh of the elements, can be called at any time
     this.updateElements();
 
-Elements references are automatically disposed of when you call `View.remove()`.
+Element references are automatically disposed of when you call `View.remove()`.
