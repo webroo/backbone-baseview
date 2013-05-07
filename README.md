@@ -213,3 +213,96 @@ Elements are automatically updated every time `render` is called. They're availa
     this.updateElements();
 
 Element references are automatically disposed of when you call `View.remove()`.
+
+
+## Dealing with nested views
+
+Dealing with nested views is an aspect of Backbone that causes more confusion than anything else. It's usually the first problem new users face when trying to build an application, and usually the first thing they'll abstract into some sort of reusable code. Many of these solutions eventually get turned into plugins, just like this one.
+
+### The problems
+
+It's worth taking some time to understand the problems associated with managing nested views in Backbone. Even if you don't end up using BaseView then hopefully the following will give you a good idea of how to tackle the problem yourself.
+
+**It's extremely easy to unbind DOM events by accident**
+
+Watch out for jquery's `html()`, using it will unbind the events of any attached subviews. This means events inside the subview will cease to work.
+
+```javascript
+initialize: function() {
+  this.welcomeView = new WelcomeView();
+},
+render: function() {
+  // On the second time round this will remove the subview and unbind its events...
+  this.$el.html(template(templateData));
+
+  // ...so we need to attach the subview and re-delegate events each time
+  this.welcomeView.$el.appendTo(this.$('.container'));
+  this.welcomeView.delegateEvents();
+  this.welcomeView.render(); // You may also want to call this, to cascade render
+}
+```
+
+Internally `.html()` calls `.empty()` which unbinds events on *all* child nodes. The solution above simply uses the built-in `delegateEvents` method to re-bind the view's events. You can also try temporarily detaching the subview from the DOM while you render.
+
+**The order in which you attach/render your subviews can make a difference**
+
+Sometimes a subview will size itself proportionally based on the dimensions of it's parent. If the subview isn't attached to the parent at the point you call `render` then you won't be able to read any meaningful dimensions from it. While not a common problem it's certainly one that's very frustrating if you've ever encountered it. It can be especially tricky if you've perpetuated the problem down a deep view hierarchy.
+
+The following example shows how to fix this:
+
+```javascript
+// Common approach, but the view won't be attached to the parent during render
+this.$el.append(this.mySubview.render().$el);
+
+// This is easily fixed by just attaching the view before rendering
+this.$el.append(this.mySubview.$el);
+this.mySubview.render();
+```
+
+**Remembering to dispose of your subview references**
+
+Clearing up your subview references isn't hard, but it's easy to forget, and if you don't remove all the references then you might run into some memory management issues down the road.
+
+Backbone does a good job of automatically cleaning up events in your views when you call `remove()` - wouldn't it be nice if it did it for subviews too?
+
+### The solution
+
+BaseView attempts to break these issues down into two separate solutions:
+
+1. [Attaching subviews](#attaching-subviews) - Solves event binding and the attach-then-render problem
+2. *TODO:* Storing subviews - Solves maintaining subview references and automatically disposing of them
+
+## Attaching subviews
+
+BaseView provides several methods that help you to attach your views to the DOM:
+
+* `myView.appendTo(element)` - Appends `myView.$el` to the given jquery `element`
+* `myView.prependTo(element)` - Prepends `myView.$el` to the given jquery `element`
+* `myView.replace(element)` - Replaces `element` with `myView.$el`
+
+Internally each of these functions will also bind the view's events and ensure it's attached before it's rendered. This solves two of the [previously discussed problems](#the-problems).
+
+Here's an example of their usage:
+
+```javascript
+var SiteView = Backbone.BaseView.extend({
+  initialize: function() {
+    // WelcomeView is a subclass of BaseView
+    this.welcomeView = new WelcomeView();
+  },
+  template: function() {
+    return '<h1>My Site</h1><div class=".container"></div>';
+  },
+  afterRender: function() {
+    // Attach the subview to the container div
+    this.welcomeView.appendTo(this.$('.container'));
+  }
+});
+
+var siteView = new SiteView();
+siteView.appendTo('body'); // Also use appendTo to attach the top-most view
+```
+
+**Note:** You should try to use `appendTo()` for every view, even the top-most one. This ensures you're taking advantage of the attach-then-render functionality for the entire hierarchy.
+
+It's worth mentioning that these methods don't store any subview references, you're still responsible for keeping track and disposing of them manually.
