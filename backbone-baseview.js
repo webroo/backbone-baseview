@@ -71,7 +71,6 @@
     BaseView.prototype[methodName] = function(view, element) {
       view.delegateEvents();
       (element || this.$el)[methodName](view.$el);
-      view.render();
       return view;
     }
   });
@@ -80,7 +79,6 @@
     BaseView.prototype[methodName] = function(element) {
       this.delegateEvents();
       this.$el[methodName](element);
-      this.render();
       return this;
     }
   });
@@ -88,7 +86,6 @@
   BaseView.prototype.replace = function(element) {
     this.delegateEvents();
     element.replaceWith(this.$el);
-    this.render();
     return this;
   };
 
