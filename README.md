@@ -189,11 +189,10 @@ Another reason you might want to override `render` is because you're not using t
 
 Sometimes you need to modify or read values from DOM elements within your view. The most common approach is to cache references to them after the view is rendered, for example:
 
-```
+```javascript
 // Common method of working with elements inside a Backbone view:
 render: function() {
   //...render the view...
-  
   this.$title = this.$('.title'); // Store a reference to the element
 },
 onAlert: function() {
@@ -233,7 +232,7 @@ Element references are automatically disposed of when you call `View.remove()`.
 
 ## Dealing with nested views
 
-Dealing with nested views is an aspect of Backbone that causes more confusion than anything else. It's usually the first problem new users face when trying to build an application, and usually the first thing they'll abstract into some sort of reusable code. Many of these solutions eventually get turned into plugins, just like this one.
+Dealing with nested views is an aspect of Backbone that causes more confusion than anything else. It's usually the first problem new users face when trying to build an application of any size, and usually the first thing they'll abstract into some sort of reusable code. Many of these solutions eventually get turned into plugins, just like this one.
 
 ### The problems
 
@@ -241,7 +240,7 @@ It's worth taking some time to understand the problems associated with managing 
 
 **It's extremely easy to unbind DOM events by accident**
 
-Watch out for jquery's `html()`, using it will unbind the events of any attached subviews. This means events inside the subview will cease to work.
+Watch out for jquery's `html()` as using it will unbind the events of any attached subviews. This means events inside the subview will cease to work.
 
 ```javascript
 initialize: function() {
@@ -259,6 +258,24 @@ render: function() {
 ```
 
 Internally `.html()` calls `.empty()` which unbinds events on *all* child nodes. The solution above simply uses the built-in `delegateEvents()` to re-bind the events. You can also try temporarily detaching the subview from the DOM while you render.
+
+**Retaining subview state**
+
+A common pattern to deal with the above problem is to dispose and re-create subviews after every render, for example:
+ 
+```javascript
+render: function() {
+  this.$el.html(template(data));
+  if (this.mySubview) {
+    this.mySubview.remove();
+  }
+  this.mySubview = new MySubview();
+  this.mySubview.$el.appendTo(this.$('.container'));
+  //etc...
+}
+```
+
+The problem with this approach is that the subviews lose any internal state they might have when they're re-created. Even if your views don't hold state the overhead of re-creating them is more than is really necessary (especially in a deep hierarchy). As subview events are the only thing that gets lost during a re-render then it's best to just use the solution described in the previous example.
 
 **The order in which you attach/render your subviews can make a difference**
 
@@ -285,7 +302,7 @@ Backbone does a good job of automatically cleaning up events in your views when 
 
 BaseView attempts to break these issues down into two separate solutions:
 
-1. [Attaching subviews](#attaching-subviews) - Solves event binding and the attach-then-render problem
+1. [Attaching subviews](#attaching-subviews) - Solves event binding and promotes a convention for the attach-then-render problem
 2. *TODO:* Storing subviews - Solves keeping track of subviews and automatically disposing of them
 
 ## Attaching subviews
@@ -296,31 +313,41 @@ BaseView provides several methods to help you attach views to the DOM:
 * `myView.prependTo(element)` - Prepends `myView.$el` to the given jquery `element`
 * `myView.replace(element)` - Replaces `element` with `myView.$el`
 
-Internally each of these functions also re-delegates events and ensures the view is attached *before* it's rendered. This solves two of the [previously discussed problems](#the-problems).
+Internally each of these functions attaches the view, re-delegates events, and returns an instance of itself. You'll still need to render the view, and this should be done *after* a call to one of these methods. The best approach is to chain the call: `myView.appendTo(element).render()`
 
 Here's an example of their usage:
 
 ```javascript
 var SiteView = Backbone.BaseView.extend({
   initialize: function() {
-    // WelcomeView is a subclass of BaseView
+    // WelcomeView is also a subclass of BaseView
     this.welcomeView = new WelcomeView();
   },
   template: function() {
     return '<h1>My Site</h1><div class=".container"></div>';
   },
   afterRender: function() {
-    // Attach the subview to the container div, this will also render it
-    this.welcomeView.appendTo(this.$('.container'));
+    // Attach the subview to the container div and render it
+    this.welcomeView.appendTo(this.$('.container')).render();
   }
 });
 
 var siteView = new SiteView();
-siteView.appendTo('body'); // Also use appendTo to attach and render the top-most view
+// Also use appendTo to attach and render the top-most view
+siteView.appendTo('body').render();
 ```
 
-**Note:** You should try to use `appendTo()` for every view, even the top-most one. This ensures you're taking advantage of the attach-then-render functionality for the entire view hierarchy.
+**Note:** In most circumstances you will want to attach *then* render, as described in [the problems](#the-problems) section above. This is not enforced by BaseView as there are circumstances where it might not be desirable, instead it's left as a convention which you're encouraged to follow.
 
-It's worth mentioning that these methods don't store any subview references, you'll still be responsible for keeping track and disposing of them manually.
+It's worth mentioning that these methods don't store any subview references - you'll still be responsible for keeping track and disposing of them manually.
 
-These methods are designed to maintain consistency with the Backbone API. As you may know Backbone already provides `remove()`, which is a wrapper around `this.$el.remove()` that also performs some additional tasks (such as cleaning up events). BaseView simply adds wrappers around other jquery methods (eg: `appendTo`) and performs it's own tasks.
+If your Backbone views usually adopt an element (rather than appending/prepending) you should consider using `setElement()`, for example:
+
+```javascript
+afterRender: function() {
+  // setElement also re-delegates events and returns an instance of the view
+  this.welcomeView.setElement(this.$('.welcome-view')).render();
+}
+```
+
+While these methods don't look like they offer much in terms of functionality their main purpose is to promote consistency in the API. They help encapsulate the internal workings of a view and the `$el` property, much like the built-in Backbone functions `remove()` and `render()`.
