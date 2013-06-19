@@ -42,8 +42,8 @@ var MyView = Backbone.BaseView.extend({
   afterRender: function() {
     // Use the element references to access DOM elements
     this.$message('color', 'red');
-    // Attach the subview to the container element, this will also automatically render it
-    this.formView.appendTo(this.$formContainer);
+    // Attach the subview to the container element and render it
+    this.formView.appendTo(this.$formContainer).render();
   }
 });
 ```
@@ -57,11 +57,11 @@ var myView = new MyView({
   });
 });
 
-// Attach the view to the DOM, this will also automatically render it
-myView.appendTo('body');
+// Attach the view to the DOM and render it
+myView.appendTo('body').render();
 ```
 
-Several concepts are introduced in this example. The most important thing to recognise is there's no `render` function - the rendering process is automated and uses the template information provided in the class definition. The other important point to make is that views are attached to the DOM using `appendTo`, which is a function provided by BaseView that helps with nested view management.
+Several concepts are introduced in this example. The most important thing to recognise is there's no `render` function defined in the class - the rendering process is automated and uses the information provided in the `template` and `templateData` properties. The other important point to make is that views are attached to the DOM using `appendTo`, which is a function provided by BaseView that helps with nested view management.
 
 
 ## Specifying templates and data
